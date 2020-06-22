@@ -4,10 +4,66 @@
 Functions related to analysis of
 Effects of Overcapacity on Storage Requirements, Timescles, and Costs
 
+Creates net load profile
 Creates storage energy profile based on a net load profile
 
 """
 import numpy
+
+def residual(demand_data, wind_cf = 0, solar_cf = 0, 
+             share_vre = 1, share_solar_vre_mix = 0,
+             overcapacity_factor = 1):
+    """
+    Calculates net load and required capacities for solar and wind
+    based on time series data
+    
+    Returns r: residual net load time series (in MW if demand_data in MW)
+            s: solar capacity installed (same units as demand_data)
+            w: wind capacity installed (same units as demand_data)
+
+    Inputs:
+            demand_data: time series, usually MW
+            wind_cf: time series capacity factor between 0 and 1
+            solar_cf: time series capacity factor between 0 and 1
+            share_vre: share of variable renewable energy (solar and wind) in
+                        total energy mix
+            share_solar_vre_mix: share of solar energy in variable renewables
+                        if share_vre is 1, this is share solar energy total
+                        if share_vre is 0.5, and share_solar_vre_mix= 0.5, then
+                            total share_solar would be 0.25
+                        1-share_solar_vre_mix = wind fraction of vre mix
+            overcapacity_factor: amount of excess generation capacity
+                    1, generate exactly as much energy as demand
+                    1.1, capacity to generate 10% more energy than demanded
+                    2, capacity to generate twice as much (100% extra)             
+    """
+
+    #data inputs
+    demand_profile = np.array(demand_data)
+    solar_profile = np.array(solar_cf)
+    wind_profile = np.array(wind_cf)
+
+    assert(len(demand_profile) == len(solar_profile))
+    assert(len(demand_profile) == len(wind_profile))
+    assert(max(wind_profile) <= 1.0)
+    assert(min(wind_profile) >= 0)
+    assert(max(solar_profile) <= 1.0)
+    assert(min(solar_profile) >= 0)
+    
+    #solar capacity installed
+    s = (share_vre * share_solar_vre_mix *
+         np.sum(demand_profile) / np.sum(solar_profile) * overcapacity_factor) 
+
+    #wind capacity installed
+    w = (share_vre * (1-share_solar_vre_mix) *
+         np.sum(demand_profile) / np.sum(wind_profile) * overcapacity_factor)
+
+    #residual net load
+    r = (demand_profile - (s * solar_profile + w * wind_profile)).reshape(-1)
+    
+    return r, s, w
+
+
 
 def storage_energy_profile(r, time_resolution_min = 60.0,
                            efficiency_discharge = 1.0, efficiency_charge = 1.0):
